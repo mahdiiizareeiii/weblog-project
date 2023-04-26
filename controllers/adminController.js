@@ -1,0 +1,189 @@
+const multer = require("multer");
+const sharp = require("sharp");
+const shortId = require("shortid");
+const appRoot = require("app-root-path");
+const Blog = require("../models/blog");
+const {formatDate} = require("../utils/jalali");
+const {get500} = require("./errorController");
+const { fileFilter } = require("../utils/multer");
+
+exports.getDashboard = async (req, res) => {
+    const page = req.query.page || 1;
+    const postPerPage = 2;
+    console.log(page);
+    console.log(typeof(page));
+
+    try {
+        const numberOfPosts = await Blog.find({user: req.user._id }).countDocuments();
+        const blogs = await blog.find({user: req.user.id})
+            .skip((page - 1) * postPerPage)
+            .limit(postPerPage)
+        res.render("private/blogs", {
+            pageTitle: "داشبورد | بخش مدیریت",
+            path: "/dashboard",
+            layout: "./layouts/dashLayouts",
+            fullname: req.user.fullname,
+            blogs,
+            formatDate,
+            currentPage: page,
+            nextPage: page + 1,
+            previousPage: page - 1,
+            hasNextPage: postPerPage * page < numberOfPosts,
+            lastPage: Math.ceil(numberOfPosts / postPerPage)
+        });
+    } catch (err) {
+        console.log(err);
+        get500(req, res);
+    }
+};
+
+exports.getAddPost = (req, res) => {
+    res.render("private/addPost", {
+        pageTitle: "بخش مدیریت | ساخت پست جدید",
+        path: "/dashboard/add-post",
+        layout: "./layouts/dashLayout",
+        fullname: req.user.fullname,
+    });
+}
+
+exports.getEditPost = async (req, res) => {
+    const post = await Blog.findOne({
+        _id : req.params.id
+    });
+    if(!post){
+        return res.redirect("errors/404");
+    }
+
+    if(post.user.toString() != req.user._id){
+        return res.redirect("/dashboard");
+    }else {
+        res.render("private/editPost", {
+            pageTitle: "بخش مدیریت | ویرایش پست",
+            path: "/dashboard/edit-post",
+            layout: "./layouts/dashLayout",
+            fullname: req.user.fullname,
+        });
+    }
+};
+
+exports.editPost = async (req, res) => {
+    const errorArr = [];
+    const post = await Blog.findOne({_id: req.params.id});
+    try {
+        await Blog.postValidation(req.body);
+
+        if(!post){
+            return res.redirect("errors/404");
+        }
+
+        if(post.user.toString() != req.user._id){
+            return res.redirect("/dashboard");
+        }else{
+            const {title, status, body} = req.body;
+            post.title = title;
+            post.status = status;
+            post.body = body;
+            await post.save();
+            return res.redirect("/dashboard");
+
+        }
+    } catch (err) {
+        console.log(err);
+        err.inner.forEach((e) => {
+            errorArr.push({
+                name: e.path,
+                message: e.message,
+            });
+        });
+    res.render("private/editPost", {
+        pageTitle: "بخش مدیریت | ویرایش پست",
+        path: "/dashboard/add-post",
+        layout: "./layouts/dashLayout",
+        fullname: req.user.fullname,
+        errors: errorArr,
+        post,
+    });
+}
+}
+
+exports.deletePost = async (req, res) => {
+    try {
+        const result = await Blog.findByIdAndRemove(req.params.id);
+        console.log(result);
+        res.redirect("/dashboard");
+    } catch (err) {
+        console.log(err);
+        res.render("errors/500");
+    }
+
+};  
+
+exports.createPost = async (req, res) => {
+    const errorArr = [];
+    const thumbnail = req.files ? req.files.thumbnail : {};
+    const fileName = `${shortId.generate()}_${thumbnail.name}`;
+    const uploadPath = `${appRoot}/public/uploads/thumbnails/${fileName}`;
+    console.log(thumbnail);
+
+    try {
+        req.body = { ...req.body, thumbnail};
+
+        console.log(req.body);
+
+        await Blog.postValidation(req.body);
+
+        await sharp(thumbnail.data)
+            .jpeg({quality: 60})
+            .toFile(uploadPath)
+            .catch((err) => console.log(err));
+        await Blog.created({ ... req.body, user: req.user.id, thumbnail: fileName});
+        res.redirect("/dashboard");
+    } catch (err) {
+        console.log(err);
+        err.inner.forEach((e) => {
+            errorArr.push({
+                name: e.path,
+                message: e.message,
+            });
+        });
+    res.render("private/addPost", {
+        pageTitle: "بخش مدیریت | ساخت پست جدید",
+        path: "/dashboard/add-post",
+        layout: "./layouts/dashLayout",
+        fullname: req.user.fullname,
+        errors: errorArr,
+    });
+
+        
+    }        
+    };
+
+    exports.uploadImage = (req, res) => {
+
+        const upload = multer({
+            limits: {fileSize: 4000000},
+            // dest: "uploads/",
+            // storage: storage,
+            fileFilter: fileFilter
+        }).single("image");
+        // req.file
+
+        upload(req, res, async err => {
+            if (err) {
+                if(err.code === "LIMIT_FILE_SIZE"){
+                    return res.status(400).send("حجم عکس باید بیشتز از 4 مگابایت نباشد");
+                }
+                res.status(400).send(err);
+            } else {
+                if(req.file){
+                    const fileName = `${shortId.generate()}_${req.file.originalname}`;
+                    await sharp(req.file.buffer).jpeg({
+                        quality: 60
+                    }).toFile(`./public/uploads/${fileName}`).catch(err => console.log(err));
+                    res.status(200).send(`http://localhost:3000/uploads/${fileName}`);
+                } else{
+                    res.send("جهت آپلود عکس باید عکسی انتخاب کنید");
+                }
+            }
+        });
+    };
