@@ -1,6 +1,8 @@
 // const bcrypt = require("bcryptjs");
 const passport = require("passport");
 const User = require("../models/User");
+const jwt = require("")
+const { sendEmail } = require("../utils/mailer");
 
 exports.login = (req, res) => {
     res.render("login", {
@@ -87,6 +89,9 @@ exports.createUser = async (req, res) => {
             });
         }
 
+        // Send Welcome Email
+        sendEmail(email, fullname, "خوش آمدی به وبلاگ ما", "خیلی خوشحالیم که ملحق شدی");
+
         // const hash = await bcrypt.hash(password, 10);
         // await User.create({ fullname, email, password });
         req.flash("success_msg", "ثبت نام موفقیت آمیز بود.");
@@ -107,3 +112,44 @@ exports.createUser = async (req, res) => {
         });
     }
 };
+
+exports.forgetPassword = async (req, res) => {
+    res.render("forgetPass", {
+        pageTitle: "فراموشی رمز عبور",
+        path: "/login",
+        message: req.flash("success_msg"),
+        error: req.flash("error"),
+    });
+};
+
+exports.handleForgetPassword = async (req,res) => {
+    const {email} = req.body;
+
+    const user = await User.findOne({email: email});
+
+    if(!user) {
+        req.flash("error", "کاربری با ایمیل در پایگاه داده ثبت نیست");
+        return res.render("forgetPass", {
+            pageTitle: "فراموشی رمز عبور",
+            path: "/login",
+            message: req.flash("success_msg"),
+            error: req.flash("error"),
+        });
+    }
+
+    const token = jwt.sign({userId: user._id}, process.env.JWT_SECRET, {expireIn: "1h"});
+    const resetLink = `http://localhost:3000/users/reset-password/${token}`;
+
+    sendEmail(user.email, user.fullname, "فراموشی رمز عبور", `
+    جهت تغییر رمز عبور فعلی رو لینک زیر کلیک کنید
+    <a href="${resetLink}"> لینک تغییر رمز عبور </a>
+    `
+    );
+    req.flash("success_msg", "ایمیل حاوی لینک با موفقیت ارسال شد");
+    res.render("forgetPass", {
+        pageTitle: "فراموشی رمز عبور",
+        path: "/login",
+        message: req.flash("success_msg"),
+        error: req.flash("error"),
+    });
+};  

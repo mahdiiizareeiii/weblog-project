@@ -21,6 +21,14 @@ router.get("/logout", userController.logout);
 //  @route  GET /users/register
 router.get("/register", userController.register);
 
+//  @desc   forget-password
+//  @route  GET /users/forget-password
+router.get("/forget-password", userController.forgetPassword);
+
+//  @desc   handle-forget-password
+//  @route  GET /users/handle-forget-password
+router.post("/forget-password", userController.handleForgetPassword);
+
 //  @desc   Register Handle
 //  @route  POST /users/register
 router.post("/register", userController.createUser);
