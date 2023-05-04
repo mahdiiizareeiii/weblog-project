@@ -4,6 +4,7 @@ const Blog = require("../models/blog");
 const {formatDate} = require("../utils/jalali");
 const {truncate} = require("../utils/helpers");
 const { sendEmail } = require("../utils/mailer");
+const { get500 } = require("./errorController");
 
 let CAPTCHA_NUM;
 
@@ -49,7 +50,7 @@ exports.getSinglePost = async (req,res) => {
         });
     } catch (err) {
         console.log(err);
-        res.render("errors/500");
+        get500(req, res);
     }
 }
 
@@ -120,10 +121,6 @@ exports.handleContactPage = async (req, res) => {
             }); 
         };
 };
-    
-    
-
-
 
 exports.getCaptcha = (req, res) => {
     CAPTCHA_NUM = parseInt(Math.random() * 9000 * 1000);
@@ -131,4 +128,38 @@ exports.getCaptcha = (req, res) => {
     p.color(0,0,0,0);
     p.color(80,80,80,255);
 
+};
+
+exports.handleSearch =  async (req, res) => {
+    const page = +req.query.page || 1;
+    const postPerPage = 2;
+    try {
+        const numberOfPosts = await Blog.find({
+            status: "public",
+            $text: {$search: req.body.search},
+        }).countDocuments();
+
+        const posts = await Blog.find({status : "public"}).sort({ createdAt: "desc",
+        }).skip((page - 1 ) * postPerPage).limit(postPerPage);
+
+        res.render("index", {
+            pageTitle: "نتایج جستجوی شما",
+            path: "/",
+            posts,
+            formatDate,
+            truncate,
+            currentPage: page,
+            nextPage: page + 1,
+            previousPage: page - 1,
+            hasNextPage: postPerPage * page < numberOfPosts,
+            lastPage: Math.ceil(numberOfPosts / postPerPage)
+        
+        });
+    } catch (err) {
+        console.log(err);
+        res.render("errors/500", {
+            pageTitle: "500 | خطای سرور",
+            path: "/404",
+        });
+    }    
 }

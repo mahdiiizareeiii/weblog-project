@@ -1,7 +1,6 @@
-// const bcrypt = require("bcryptjs");
 const passport = require("passport");
 const User = require("../models/User");
-const jwt = require("")
+const jwt = require("");
 const { sendEmail } = require("../utils/mailer");
 
 exports.login = (req, res) => {
@@ -161,7 +160,6 @@ exports.resetPassword = async (req, res) => {
 
     try {
         decodedToken = jwt.verify(token, process.env.JWT_SECRET);
-
     } catch (err) {
         console.log(err);
         if(!decodedToken) {

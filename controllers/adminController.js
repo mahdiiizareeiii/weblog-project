@@ -82,7 +82,7 @@ exports.editPost = async (req, res) => {
         await Blog.postValidation(req.body);
 
         if(!post){
-            return res.redirect("errors/404");
+            return res.redirect("/404");
         }
 
         if(post.user.toString() != req.user._id){
@@ -137,7 +137,7 @@ exports.deletePost = async (req, res) => {
         res.redirect("/dashboard");
     } catch (err) {
         console.log(err);
-        res.render("errors/500");
+        get500(req ,res);
     }
 
 };  
@@ -210,3 +210,37 @@ exports.createPost = async (req, res) => {
             }
         });
     };
+
+exports.handleDashSearch = async (req, res) => {
+    const page = req.query.page || 1;
+    const postPerPage = 2;
+
+    try {
+        const numberOfPosts = await Blog.find({
+            user: req.user._id,
+            $text: {$search: req.body.search },
+        }).countDocuments();
+        const blogs = await blog.find({
+            user: req.user.id,
+            $text: {$search: req.body.search },            
+        })
+            .skip((page - 1) * postPerPage)
+            .limit(postPerPage)
+        res.render("private/blogs", {
+            pageTitle: "داشبورد | بخش مدیریت",
+            path: "/dashboard",
+            layout: "./layouts/dashLayouts",
+            fullname: req.user.fullname,
+            blogs,
+            formatDate,
+            currentPage: page,
+            nextPage: page + 1,
+            previousPage: page - 1,
+            hasNextPage: postPerPage * page < numberOfPosts,
+            lastPage: Math.ceil(numberOfPosts / postPerPage)
+        });
+    } catch (err) {
+        console.log(err);
+        get500(req, res);
+    }
+}

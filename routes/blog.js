@@ -24,4 +24,8 @@ router.get("/captcha.png", blogController.getCaptcha);
 //  @route  POST /contact
 router.get("/contact", blogController.handleContactPage);
 
+//  @desc   handle search
+//  @route  POST /search
+router.get("/search", blogController.handleSearch);
+
 module.exports = router;
