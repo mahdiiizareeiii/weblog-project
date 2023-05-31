@@ -5,68 +5,8 @@ const shortId = require("shortid");
 const appRoot = require("app-root-path");
 
 const Blog = require("../models/blog");
-const {formatDate} = require("../utils/jalali");
-const {get500} = require("./errorController");
 const { fileFilter } = require("../utils/multer");
 
-exports.getDashboard = async (req, res) => {
-    const page = req.query.page || 1;
-    const postPerPage = 2;
-    console.log(page);
-    console.log(typeof(page));
-
-    try {
-        const numberOfPosts = await Blog.find({user: req.user._id }).countDocuments();
-        const blogs = await blog.find({user: req.user.id})
-            .skip((page - 1) * postPerPage)
-            .limit(postPerPage)
-        res.render("private/blogs", {
-            pageTitle: "داشبورد | بخش مدیریت",
-            path: "/dashboard",
-            layout: "./layouts/dashLayouts",
-            fullname: req.user.fullname,
-            blogs,
-            formatDate,
-            currentPage: page,
-            nextPage: page + 1,
-            previousPage: page - 1,
-            hasNextPage: postPerPage * page < numberOfPosts,
-            lastPage: Math.ceil(numberOfPosts / postPerPage)
-        });
-    } catch (err) {
-        console.log(err);
-        get500(req, res);
-    }
-};
-
-exports.getAddPost = (req, res) => {
-    res.render("private/addPost", {
-        pageTitle: "بخش مدیریت | ساخت پست جدید",
-        path: "/dashboard/add-post",
-        layout: "./layouts/dashLayout",
-        fullname: req.user.fullname,
-    });
-}
-
-exports.getEditPost = async (req, res) => {
-    const post = await Blog.findOne({
-        _id : req.params.id
-    });
-    if(!post){
-        return res.redirect("errors/404");
-    }
-
-    if(post.user.toString() != req.user._id){
-        return res.redirect("/dashboard");
-    }else {
-        res.render("private/editPost", {
-            pageTitle: "بخش مدیریت | ویرایش پست",
-            path: "/dashboard/edit-post",
-            layout: "./layouts/dashLayout",
-            fullname: req.user.fullname,
-        });
-    }
-};
 
 exports.editPost = async (req, res) => {
     const errorArr = [];
@@ -142,8 +82,7 @@ exports.deletePost = async (req, res) => {
 
 };  
 
-exports.createPost = async (req, res) => {
-    const errorArr = [];
+exports.createPost = async (req, res, next) => {
     const thumbnail = req.files ? req.files.thumbnail : {};
     const fileName = `${shortId.generate()}_${thumbnail.name}`;
     const uploadPath = `${appRoot}/public/uploads/thumbnails/${fileName}`;
@@ -159,25 +98,10 @@ exports.createPost = async (req, res) => {
             .jpeg({quality: 60})
             .toFile(uploadPath)
             .catch((err) => console.log(err));
-        await Blog.created({ ... req.body, user: req.user.id, thumbnail: fileName});
-        res.redirect("/dashboard");
+        await Blog.created({ ... req.body, user: req.userId, thumbnail: fileName});
+        res.status(201).json({message: "پست جدید با موفقیت ساخته شد"}); 
     } catch (err) {
-        console.log(err);
-        err.inner.forEach((e) => {
-            errorArr.push({
-                name: e.path,
-                message: e.message,
-            });
-        });
-    res.render("private/addPost", {
-        pageTitle: "بخش مدیریت | ساخت پست جدید",
-        path: "/dashboard/add-post",
-        layout: "./layouts/dashLayout",
-        fullname: req.user.fullname,
-        errors: errorArr,
-    });
-
-        
+        next(err);
     }        
     };
 
@@ -198,9 +122,9 @@ exports.createPost = async (req, res) => {
                 }
                 res.status(400).send(err);
             } else {
-                if(req.file){
-                    const fileName = `${shortId.generate()}_${req.file.originalname}`;
-                    await sharp(req.file.buffer).jpeg({
+                if(req.files){
+                    const fileName = `${shortId.generate()}_${req.files.name}`;
+                    await sharp(req.files.image.date).jpeg({
                         quality: 60
                     }).toFile(`./public/uploads/${fileName}`).catch(err => console.log(err));
                     res.status(200).send(`http://localhost:3000/uploads/${fileName}`);
@@ -211,36 +135,3 @@ exports.createPost = async (req, res) => {
         });
     };
 
-exports.handleDashSearch = async (req, res) => {
-    const page = req.query.page || 1;
-    const postPerPage = 2;
-
-    try {
-        const numberOfPosts = await Blog.find({
-            user: req.user._id,
-            $text: {$search: req.body.search },
-        }).countDocuments();
-        const blogs = await blog.find({
-            user: req.user.id,
-            $text: {$search: req.body.search },            
-        })
-            .skip((page - 1) * postPerPage)
-            .limit(postPerPage)
-        res.render("private/blogs", {
-            pageTitle: "داشبورد | بخش مدیریت",
-            path: "/dashboard",
-            layout: "./layouts/dashLayouts",
-            fullname: req.user.fullname,
-            blogs,
-            formatDate,
-            currentPage: page,
-            nextPage: page + 1,
-            previousPage: page - 1,
-            hasNextPage: postPerPage * page < numberOfPosts,
-            lastPage: Math.ceil(numberOfPosts / postPerPage)
-        });
-    } catch (err) {
-        console.log(err);
-        get500(req, res);
-    }
-}
